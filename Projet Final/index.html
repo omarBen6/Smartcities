@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32-CAM Control Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="flex h-screen bg-gray-100">
+
+  <!-- ============================
+       BARRE LATÉRALE : CONFIGURATION ESP32
+  ============================ -->
+  <div class="w-80 bg-slate-800 text-white flex flex-col p-6 space-y-5">
+    <h2 class="text-xl font-bold mb-4">Configuration ESP32-CAM</h2>
+
+    <form method="POST" action="/update_params" class="flex flex-col space-y-3">
+
+      <!-- Paramètres Wi-Fi -->
+      <h3 class="text-lg font-semibold border-b border-slate-600 pb-1">Wi-Fi</h3>
+      <label>SSID</label>
+      <input type="text" name="ssid" class="p-2 rounded text-black" placeholder="Nom du réseau Wi-Fi">
+
+      <label>Mot de passe</label>
+      <input type="password" name="password" class="p-2 rounded text-black" placeholder="••••••••••">
+
+      <!-- Paramètres caméra -->
+      <h3 class="text-lg font-semibold border-b border-slate-600 pt-4 pb-1">Caméra</h3>
+
+      <!-- Résolution -->
+      <label>Résolution</label>
+      <select name="resolution" class="p-2 rounded text-black">
+        <option value="QVGA (320x240)">QVGA (320x240)</option>
+        <option value="VGA (640x480)">VGA (640x480)</option>
+        <option value="SVGA (800x600)">SVGA (800x600)</option>
+        <option value="XGA (1024x768)">XGA (1024x768)</option>
+        <option value="SXGA (1280x1024)">SXGA (1280x1024)</option>
+        <option value="UXGA (1600x1200)">UXGA (1600x1200)</option>
+      </select>
+
+      <!-- Luminosité -->
+      <label>Luminosité</label>
+      <input type="range" name="brightness" min="-2" max="2" value="0" class="w-full">
+
+      <!-- Contraste -->
+      <label>Contraste</label>
+      <input type="range" name="contrast" min="-2" max="2" value="0" class="w-full">
+
+      <!-- Saturation -->
+      <label>Saturation</label>
+      <input type="range" name="saturation" min="-2" max="2" value="0" class="w-full">
+
+      <!-- Qualité JPEG -->
+      <label>Qualité JPEG</label>
+      <input type="number" name="quality" min="10" max="63" value="30" class="p-2 rounded text-black">
+
+      <!-- Miroir / Flip -->
+      <div class="flex items-center space-x-2">
+        <input type="checkbox" name="mirror" id="mirror">
+        <label for="mirror">Miroir horizontal</label>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <input type="checkbox" name="flip" id="flip">
+        <label for="flip">Rotation verticale</label>
+      </div>
+
+      <!-- Bouton -->
+      <button type="submit"
+              class="bg-green-600 hover:bg-green-700 text-white py-2 rounded mt-4 font-semibold">
+        Envoyer au module
+      </button>
+    </form>
+  </div>
+
+  <!-- ============================
+       ZONE PRINCIPALE : IMAGES CAPTURÉES
+  ============================ -->
+  <div class="flex-1 overflow-y-auto p-6">
+    <h1 class="text-2xl font-semibold mb-4">Images capturées</h1>
+
+    <div id="gallery" class="grid grid-cols-3 gap-4">
+      {% for img in images %}
+      <div class="bg-white rounded-lg shadow-md p-2 flex items-center justify-center">
+        <img src="{{ url_for('static', filename=img) }}" class="rounded max-h-60 object-contain">
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</body>
+</html>
