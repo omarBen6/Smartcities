@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Caméra - {{ selected_cam.Nom if selected_cam else 'Aucune' }}</title>
+  <title>Dashboard Camera - {{ selected_cam.Nom if selected_cam else 'Aucune' }}</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
 
   <style>
-    /* Petite animation pour le changement d'onglet */
+    /* Animation pour le changement d'onglet */
     .fade-in { animation: fadeIn 0.3s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     
@@ -38,7 +38,7 @@
 
       <div>
         <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-            Caméra Active
+            Camera Active
         </label>
         <div class="relative">
             <select onchange="window.location.href='/?cam_id='+this.value" 
@@ -48,7 +48,7 @@
                         🎥 {{ cam.Nom }} (ID: {{ cam.id }})
                     </option>
                 {% else %}
-                    <option value="">Aucune caméra</option>
+                    <option value="">Aucune camera</option>
                 {% endfor %}
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
@@ -77,11 +77,11 @@
             <h4 class="text-xs font-bold text-blue-400 mb-2">CONNEXION</h4>
             <div class="space-y-2">
                 <div>
-                    <label class="text-[10px] text-gray-500 uppercase block">SSID</label>
-                    <input type="text" name="ssid" placeholder="Nom du réseau" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs focus:border-blue-500 focus:outline-none">
+                    <label class="text-[10px] text-gray-500 uppercase block">SSID (Reseau)</label>
+                    <input type="text" name="ssid" placeholder="Nom du reseau" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs focus:border-blue-500 focus:outline-none">
                 </div>
                 <div>
-                    <label class="text-[10px] text-gray-500 uppercase block">Password</label>
+                    <label class="text-[10px] text-gray-500 uppercase block">Password (Mdp)</label>
                     <input type="password" name="password" placeholder="•••••••" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs focus:border-blue-500 focus:outline-none">
                 </div>
             </div>
@@ -91,7 +91,7 @@
              <h4 class="text-xs font-bold text-blue-400 mb-2">IMAGE</h4>
              
              <div>
-                <label class="text-[10px] text-gray-500 uppercase block mb-1">Résolution</label>
+                <label class="text-[10px] text-gray-500 uppercase block mb-1">Resolution</label>
                 <select name="resolution" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs">
                     <option value="QVGA (320x240)" {% if config and config.resolution == 'QVGA (320x240)' %}selected{% endif %}>QVGA</option>
                     <option value="VGA (640x480)" {% if config and config.resolution == 'VGA (640x480)' %}selected{% endif %}>VGA</option>
@@ -101,14 +101,14 @@
              </div>
 
              <div>
-                <label class="text-[10px] text-gray-500 uppercase block mb-1">Qualité JPEG (0-63)</label>
+                <label class="text-[10px] text-gray-500 uppercase block mb-1">Qualite JPEG (0-63)</label>
                 <input type="number" name="quality" min="0" max="63" value="{{ config.quality if config else 10 }}" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs">
              </div>
 
              <div class="space-y-2">
                  <div>
                     <div class="flex justify-between">
-                        <label class="text-[10px] text-gray-500 uppercase">Luminosité</label>
+                        <label class="text-[10px] text-gray-500 uppercase">Luminosite</label>
                         <span class="text-[10px] text-gray-400">{{ config.brightness if config else 0 }}</span>
                     </div>
                     <input type="range" name="brightness" min="-2" max="2" value="{{ config.brightness if config else 0 }}" class="w-full accent-blue-500 cursor-pointer">
@@ -160,10 +160,10 @@
                 {% if selected_cam %}
                     {{ selected_cam.Nom }}
                 {% else %}
-                    Aucune caméra sélectionnée
+                    Aucune camera selectionnee
                 {% endif %}
             </h1>
-            <p class="text-sm text-gray-500">ID Système: {{ selected_cam.id if selected_cam else 'N/A' }}</p>
+            <p class="text-sm text-gray-500">ID Systeme: {{ selected_cam.id if selected_cam else 'N/A' }}</p>
         </div>
         <div class="text-right">
              <span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded border border-green-400">En ligne</span>
@@ -178,7 +178,7 @@
                 <input type="hidden" name="cam_id" value="{{ selected_cam.id if selected_cam else '' }}">
                 
                 <div>
-                    <label class="text-xs font-bold text-gray-500 uppercase">Début</label>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Debut</label>
                     <input type="date" name="start_date" class="block w-full border-gray-300 rounded-md border p-2 text-sm">
                 </div>
                 <div>
@@ -204,7 +204,7 @@
                         </span>
                     </div>
 
-                    <form action="/delete_image/{{ img.id }}" method="POST" onsubmit="return confirm('Supprimer définitivement cette image ?');">
+                    <form action="/delete_image/{{ img.id }}" method="POST" onsubmit="return confirm('Supprimer definitivement cette image ?');">
                         <button type="submit" class="absolute top-2 right-2 bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-700 hover:scale-110">
                             <i class="fa-solid fa-trash text-xs"></i>
                         </button>
@@ -214,7 +214,7 @@
                 {% else %}
                 <div class="col-span-full text-center py-20">
                     <div class="text-gray-400 text-6xl mb-4"><i class="fa-regular fa-image"></i></div>
-                    <p class="text-gray-500 text-lg">Aucune image trouvée pour cette caméra.</p>
+                    <p class="text-gray-500 text-lg">Aucune image trouvee pour cette camera.</p>
                 </div>
                 {% endfor %}
             </div>
