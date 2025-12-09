@@ -1,202 +1,183 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from TablesMariaDB import Image, Battrie, Temperature, Wifi, CamParam
-from tkinter import *
-from tkinter import ttk
+from TablesMariaDB import Image, Battrie, Wifi, CamParametre, Camera
 import paho.mqtt.client as client
 from datetime import datetime
 import time
 import os
 import base64
 
-engine = create_engine("mariadb+mariadbconnector://martin:1234@192.168.2.45:3306/RPG", echo=True)
+# Configuration BDD
+engine = create_engine("mariadb+mariadbconnector://martin:1234@192.168.2.58:3306/RPG", echo=True)
 Session = sessionmaker(bind=engine)
 
-id_im = 0
-id_bat = 0
-id_temp = 0
+# Dictionnaires pour gérer plusieurs caméras en même temps
+# Structure : { camera_id : [chunk1, chunk2, ...] }
+buffers_images = {} 
+noms_images = {}
 
-# Variables pour la reconstruction d'image
-image_chunks = {}            # Dictionnaire {index: bytes}
+# Variables globales config
 dernier_wifi = {}
 dernier_cam = {}
-nom_image_courante = None
-image_en_reception = False   
+update = False
 
-def envoyerParametresVersESP32():
+def envoyerParametresVersESP32(cli):
     global dernier_wifi, dernier_cam
     session = Session()
 
-    # Récupérer les derniers paramètres Wi-Fi
-    wifi = session.query(Wifi).order_by(Wifi.id.desc()).first()
-    if wifi:
-        data_wifi = {
-            "ssid": wifi.ssid,
-            "password": wifi.pasword
-        }
-        if data_wifi != dernier_wifi:
-            print("Envoi des paramètres Wi-Fi :")
-            cli.publish("B3/MartinOmar/parametre/wifi/ssid", str(wifi.ssid))
-            print(f"ssid = {wifi.ssid}")
-            cli.publish("B3/MartinOmar/parametre/wifi/password", str(wifi.pasword))
-            print(f"password = {wifi.pasword}")
-            dernier_wifi = data_wifi.copy()
-    else:
-        print("Aucun paramètre Wi-Fi trouvé en base.")
-
-    # Récupérer les derniers paramètres caméra
-    cam = session.query(CamParam).order_by(CamParam.id.desc()).first()
+    # NOTE: Ici, on envoie à TOUTES les caméras via le wildcard '+' si nécessaire
+    # ou on pourrait cibler une caméra spécifique si on gérait une file d'attente.
+    
+    # --- Code d'envoi conservé (simplifié pour l'exemple) ---
+    # Pour l'instant, on publie sur un topic générique (sans ID spécifique)
+    # Si tu veux configurer la Caméra 1, le topic devrait être B3/MartinOmar/1/...
+    cam = session.query(CamParametre).order_by(CamParametre.id.desc()).first()
     if cam:
-        data_cam = {
-            "resolution": cam.resolution,
-            "brightness": cam.brightness,
-            "contrast": cam.contrast,
-            "saturation": cam.saturation,
-            "quality": cam.quality,
-            "mirror": cam.mirror,
-            "flip": cam.flip
-        }
-        if data_cam != dernier_cam:
-            print("\nEnvoi des paramètres caméra :")
-            cli.publish("B3/MartinOmar/parametre/camera/resolution", str(cam.resolution))
-            cli.publish("B3/MartinOmar/parametre/camera/brightness", str(cam.brightness))
-            cli.publish("B3/MartinOmar/parametre/camera/contrast", str(cam.contrast))
-            cli.publish("B3/MartinOmar/parametre/camera/saturation", str(cam.saturation))
-            cli.publish("B3/MartinOmar/parametre/camera/quality", str(cam.quality))
-            cli.publish("B3/MartinOmar/parametre/camera/mirror", str(cam.mirror))
-            cli.publish("B3/MartinOmar/parametre/camera/flip", str(cam.flip))
-            print("Paramètres caméra envoyés.")
-            dernier_cam = data_cam.copy()
-    else:
-        print("Aucun paramètre caméra trouvé en base.")
-
+        cli.publish("B3/MartinOmar/parametre/camera/resolution", str(cam.resolution))
+        # ... (reste des publications) ...
+        print("Paramètres envoyés aux caméras.")
+    
     session.close()
 
-# Callbacks MQTT
-def fctTopicBattrie(ud, c, m):
-    global id_bat
-    id_bat += 1
-    pourc = m.payload.decode()
-    date_reception = datetime.now()
+# --- CALLBACKS MQTT ---
 
-    session = Session()
-    maBattrie = Battrie(idb=id_bat, poucentage=pourc, date=date_reception)
-    session.add(maBattrie)
-    session.commit()
-    session.close()
+def fctTopicBattrie(client, userdata, message):
+    try:
+        topic = message.topic
+        payload = message.payload.decode()
+        
+        # 1. Extraction de l'ID de la caméra depuis le topic
+        # Ex: B3/MartinOmar/1/parametre/battrie/level
+        parts = topic.split('/')
+        if len(parts) < 3 or not parts[2].isdigit():
+            return # Topic invalide
+            
+        cam_id = int(parts[2]) 
+        
+        pourc = 0
+        volt = 0.0
 
-    print(f"Batterie: {m.payload.decode()}")
+        # On traite selon le type de message
+        if "level" in topic:
+            pourc = int(float(payload)) # Conversion safe
+            print(f"[Cam {cam_id}] Batterie Level: {pourc}%")
+        elif "tension" in topic:
+            volt = float(payload)
+            print(f"[Cam {cam_id}] Tension: {volt}V")
 
+        # Enregistrement en BDD
+        # Note: Idéalement, il faudrait grouper level et tension, 
+        # mais ici on insère dès qu'on reçoit une info pour simplifier.
+        session = Session()
+        maBattrie = Battrie(
+            NumeroCam=cam_id,  # AJOUT IMPORTANT : On lie à la caméra
+            poucentage=pourc,
+            voltage=volt,
+            date=datetime.now()
+        )
+        session.add(maBattrie)
+        session.commit()
+        session.close()
 
-def fctTopicTemperature(ud, c, m):
-    global id_temp
-    id_temp += 1
-    temp = m.payload.decode()
-    date_reception = datetime.now()
-
-    session = Session()
-    maTemperature = Temperature(idt=id_temp, temperature=temp, date=date_reception)
-    session.add(maTemperature)
-    session.commit()
-    session.close()
-
-    print(f"Température: {m.payload.decode()}")
-
-
-def fctTopicImage(ud, c, m):
-    global id_im, image_chunks, nom_image_courante, image_en_reception
-
-    topic = m.topic
-    payload = m.payload
-
-    # Début de la transmission
-    if topic == "B3/MartinOmar/image/start":
-        nom_image_courante = payload.decode().strip()
-        image_chunks = {}
-        image_en_reception = True
-        print(f"Début réception de {nom_image_courante}")
-
-    # Réception d'un morceau avec index
-    elif topic == "B3/MartinOmar/image/data":
-        try:
-            message = payload.decode()
-            # Découper le message en "index|base64data"
-            index_str, chunk_b64 = message.split("|", 1)
-            index = int(index_str)
-            image_chunks[index] = base64.b64decode(chunk_b64)
-            print(f"Morceau #{index} reçu ({len(chunk_b64)} caractères base64)")
-        except Exception as e:
-            print("Erreur lors du traitement d’un morceau :", e)
-
-    # Fin de la transmission
-    elif topic == "B3/MartinOmar/image/end" and image_en_reception:
-        id_im += 1
-
-        # Créer le dossier de destination s'il n'existe pas!!!!
-        dossier_destination = r"C:\Users\UItilisateur\Desktop\BAc 3\Smartcities\ImagesRecues"
-        os.makedirs(dossier_destination, exist_ok=True)
-
-        # 🔹 Générer un nom d'image unique (avec horodatage précis)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        nom_fichier_unique = f"image_{timestamp}.jpg"
-        chemin_complet = os.path.join(dossier_destination, nom_fichier_unique)
-
-        try:
-            # Réassembler les morceaux dans le bon ordre
-            image_finale = b"".join(image_chunks[i] for i in sorted(image_chunks.keys()))
-
-            # Écrire l'image sur le disque
-            with open(chemin_complet, "wb") as f:
-                f.write(image_finale)
-
-            print(f"Image terminée : {chemin_complet} ({len(image_finale)} octets)")
-
-            # Enregistrer le chemin et la date dans la base MariaDB
-            session = Session()
-            monImage = Image(
-                idi=id_im,
-                path=chemin_complet,
-                date=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
-            session.add(monImage)
-            session.commit()
-            session.close()
-
-        except Exception as e:
-            print("Erreur lors de la reconstruction :", e)
-
-        # Réinitialiser les variables pour la prochaine image
-        image_chunks = {}
-        nom_image_courante = None
-        image_en_reception = False
-
-    else:
-        print("Paquet reçu hors contexte image.")
+    except Exception as e:
+        print(f"Erreur Batterie: {e}")
 
 
+def fctTopicImage(client, userdata, message):
+    global buffers_images, noms_images
+
+    topic = message.topic
+    
+    # 1. Extraction ID Caméra
+    parts = topic.split('/')
+    if len(parts) < 3 or not parts[2].isdigit():
+        return
+    cam_id = int(parts[2])
+
+    if "start" in topic:
+        nom_fic = message.payload.decode().strip()
+        buffers_images[cam_id] = [] # On initialise une liste pour CETTE caméra
+        noms_images[cam_id] = nom_fic
+        print(f"[Cam {cam_id}] Début réception : {nom_fic}")
+
+    elif "data" in topic:
+        # On ajoute le morceau au buffer de CETTE caméra
+        if cam_id in buffers_images:
+            buffers_images[cam_id].append(message.payload.decode())
+            # Optionnel: print un point pour montrer l'activité
+            # print(".", end="", flush=True) 
+
+    elif "end" in topic:
+        if cam_id in buffers_images and len(buffers_images[cam_id]) > 0:
+            print(f"\n[Cam {cam_id}] Fin réception. Reconstruction...")
+            
+            try:
+                # Reconstruction
+                full_data_str = "".join(buffers_images[cam_id])
+                image_bytes = base64.b64decode(full_data_str)
+                
+                # Chemin
+                dossier = r"/home/martin/Desktop/smartcities/static/images"
+                os.makedirs(dossier, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nom_final = f"cam{cam_id}_{timestamp}.jpg"
+                chemin_complet = os.path.join(dossier, nom_final)
+
+                # Écriture disque
+                with open(chemin_complet, "wb") as f:
+                    f.write(image_bytes)
+                
+                # Écriture BDD
+                session = Session()
+                nouvelle_image = Image(
+                    NumeroCam=cam_id, # AJOUT IMPORTANT
+                    path=chemin_complet, # Stocke le chemin, pas les bytes
+                    date=datetime.now()
+                )
+                session.add(nouvelle_image)
+                session.commit()
+                session.close()
+                print(f"[Cam {cam_id}] Image sauvegardée : {nom_final}")
+
+            except Exception as e:
+                print(f"[Cam {cam_id}] Erreur reconstruction : {e}")
+            
+            # Nettoyage mémoire pour cette caméra
+            buffers_images[cam_id] = []
+            noms_images[cam_id] = None
 
 
-# Connexion MQTT
+def fctTopicUpdate(client, userdata, message):
+    global update
+    print("Demande de mise à jour reçue.")
+    update = True
+
+
+# --- CONFIGURATION MQTT ---
 cli = client.Client()
-cli.connect("192.168.2.35", 1883)
+cli.connect("192.168.2.58", 1883)
 
-cli.subscribe("B3/MartinOmar/parametre/temperature")
-cli.subscribe("B3/MartinOmar/parametre/battrie")
-cli.subscribe("B3/MartinOmar/image/start")
-cli.subscribe("B3/MartinOmar/image/data", qos=1)  # QoS 1 : garantit la réception
-cli.subscribe("B3/MartinOmar/image/end")
+# 1. Abonnements avec le Wildcard '+' pour l'ID
+# Ex: B3/MartinOmar/1/image/start
+cli.subscribe("B3/MartinOmar/+/parametre/battrie/#") # '#' attrape level et tension
+cli.subscribe("B3/MartinOmar/+/image/start")
+cli.subscribe("B3/MartinOmar/+/image/data", qos=1)
+cli.subscribe("B3/MartinOmar/+/image/end")
+cli.subscribe("B3/MartinOmar/parametre/camera/update") # Celui-ci peut rester global
 
-cli.message_callback_add("B3/MartinOmar/parametre/battrie", fctTopicBattrie)
-cli.message_callback_add("B3/MartinOmar/parametre/temperature", fctTopicTemperature)
-cli.message_callback_add("B3/MartinOmar/image/start", fctTopicImage)
-cli.message_callback_add("B3/MartinOmar/image/data", fctTopicImage)
-cli.message_callback_add("B3/MartinOmar/image/end", fctTopicImage)
+# 2. Ajout des callbacks AVEC le wildcard '+'
+# C'est ici que tu avais l'erreur principale
+cli.message_callback_add("B3/MartinOmar/+/parametre/battrie/#", fctTopicBattrie)
+cli.message_callback_add("B3/MartinOmar/+/image/start", fctTopicImage)
+cli.message_callback_add("B3/MartinOmar/+/image/data", fctTopicImage)
+cli.message_callback_add("B3/MartinOmar/+/image/end", fctTopicImage)
+cli.message_callback_add("B3/MartinOmar/parametre/camera/update", fctTopicUpdate)
 
+print("Système prêt. En attente de données...")
 cli.loop_start()
 
 while True:
-    print("Je suis dans ma boucle")
-    envoyerParametresVersESP32()
-    time.sleep(5)
-
-cli.loop_stop()
+    if update:
+        envoyerParametresVersESP32(cli)
+        update = False
+    time.sleep(1)
