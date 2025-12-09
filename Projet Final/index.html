@@ -3,192 +3,292 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32-CAM Control Panel</title>
+  <title>Dashboard Caméra - {{ selected_cam.Nom if selected_cam else 'Aucune' }}</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+
+  <style>
+    /* Petite animation pour le changement d'onglet */
+    .fade-in { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
 </head>
 
-<body class="flex h-screen bg-gray-100">
+<body class="flex h-screen bg-gray-100 font-sans">
 
-  <div class="w-80 bg-slate-800 text-white flex flex-col p-6 space-y-5 h-full overflow-y-auto">
-    <h2 class="text-xl font-bold mb-2">ESP32 Dashboard</h2>
-
-    <div class="flex flex-col gap-2 border-b border-slate-600 pb-4">
-        <button onclick="showTab('gallery')" id="btn-gallery" class="bg-blue-600 text-white p-2 rounded text-left font-semibold hover:bg-blue-500 transition">
-            🖼️ Galerie Images
-        </button>
-        <button onclick="showTab('stats')" id="btn-stats" class="bg-slate-700 text-gray-300 p-2 rounded text-left font-semibold hover:bg-blue-500 hover:text-white transition">
-            📈 Graphiques Batterie
-        </button>
+  <div class="w-80 bg-slate-900 text-white flex flex-col h-full shadow-2xl">
+    
+    <div class="p-6 bg-slate-800 border-b border-slate-700">
+      <h2 class="text-xl font-bold flex items-center gap-2">
+        <i class="fa-solid fa-server"></i> Control Panel
+      </h2>
     </div>
 
-    <h2 class="text-lg font-bold mt-2">Configuration</h2>
-    <form method="POST" action="/update_params" class="flex flex-col space-y-3">
-      
-      <h3 class="text-sm font-semibold text-gray-400">Wi-Fi</h3>
-      <input type="text" name="ssid" class="p-2 rounded text-black text-sm" placeholder="SSID">
-      <input type="password" name="password" class="p-2 rounded text-black text-sm" placeholder="Mot de passe">
+    <div class="p-6 overflow-y-auto flex-1 space-y-6">
 
-      <h3 class="text-sm font-semibold text-gray-400 mt-2">Caméra</h3>
-      
-      <label class="text-xs">Résolution</label>
-      <select name="resolution" class="p-2 rounded text-black text-sm">
-        <option value="QVGA (320x240)">QVGA (320x240)</option>
-        <option value="VGA (640x480)">VGA (640x480)</option>
-        <option value="SVGA (800x600)">SVGA (800x600)</option>
-        <option value="XGA (1024x768)">XGA (1024x768)</option>
-        <option value="UXGA (1600x1200)">UXGA (1600x1200)</option>
-      </select>
-
-      <label class="text-xs">Luminosité / Contraste / Saturation</label>
-      <div class="grid grid-cols-3 gap-2">
-          <input type="range" name="brightness" min="-2" max="2" value="0" title="Luminosité">
-          <input type="range" name="contrast" min="-2" max="2" value="0" title="Contraste">
-          <input type="range" name="saturation" min="-2" max="2" value="0" title="Saturation">
+      <div>
+        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+            Caméra Active
+        </label>
+        <div class="relative">
+            <select onchange="window.location.href='/?cam_id='+this.value" 
+                    class="w-full bg-slate-700 text-white p-3 rounded-lg appearance-none cursor-pointer hover:bg-slate-600 transition focus:outline-none border border-slate-600 focus:border-blue-500">
+                {% for cam in cameras %}
+                    <option value="{{ cam.id }}" {% if selected_cam and cam.id == selected_cam.id %}selected{% endif %}>
+                        🎥 {{ cam.Nom }} (ID: {{ cam.id }})
+                    </option>
+                {% else %}
+                    <option value="">Aucune caméra</option>
+                {% endfor %}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
+                <i class="fa-solid fa-chevron-down text-xs"></i>
+            </div>
+        </div>
       </div>
 
-      <label class="text-xs">Qualité (0-63)</label>
-      <input type="number" name="quality" min="0" max="63" value="10" class="p-2 rounded text-black text-sm">
-
-      <div class="flex items-center space-x-2 mt-2">
-        <input type="checkbox" name="mirror" id="mirror">
-        <label for="mirror" class="text-sm">Miroir</label>
-        <input type="checkbox" name="flip" id="flip" class="ml-4">
-        <label for="flip" class="text-sm">Flip</label>
+      <div class="space-y-2">
+          <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Navigation</label>
+          <button onclick="switchTab('gallery')" id="btn-gallery" class="w-full text-left p-3 rounded-lg flex items-center gap-3 transition bg-blue-600 text-white shadow-lg">
+              <i class="fa-solid fa-images"></i> Galerie Images
+          </button>
+          <button onclick="switchTab('stats')" id="btn-stats" class="w-full text-left p-3 rounded-lg flex items-center gap-3 transition bg-slate-800 text-gray-400 hover:bg-slate-700 hover:text-white">
+              <i class="fa-solid fa-chart-line"></i> Statistiques Batterie
+          </button>
       </div>
 
-      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white py-2 rounded mt-4 font-semibold">
-        Envoyer
-      </button>
-    </form>
+      <div class="pt-4 border-t border-slate-700">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Configuration</h3>
+        
+        <form method="POST" action="/update_params" class="space-y-4">
+          <input type="hidden" name="cam_id" value="{{ selected_cam.id if selected_cam else '' }}">
+
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Wi-Fi SSID</label>
+            <input type="text" name="ssid" placeholder="Nom du réseau" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm focus:border-blue-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Wi-Fi Password</label>
+            <input type="password" name="password" placeholder="•••••••" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm focus:border-blue-500 focus:outline-none">
+          </div>
+
+          <div>
+             <label class="text-xs text-gray-500 block mb-1">Résolution</label>
+             <select name="resolution" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm">
+                <option value="QVGA (320x240)" {% if config and config.resolution == 'QVGA (320x240)' %}selected{% endif %}>QVGA</option>
+                <option value="VGA (640x480)" {% if config and config.resolution == 'VGA (640x480)' %}selected{% endif %}>VGA</option>
+                <option value="SVGA (800x600)" {% if config and config.resolution == 'SVGA (800x600)' %}selected{% endif %}>SVGA</option>
+                <option value="UXGA (1600x1200)" {% if config and config.resolution == 'UXGA (1600x1200)' %}selected{% endif %}>UXGA</option>
+             </select>
+          </div>
+
+          <div>
+              <label class="text-xs text-gray-500 block mb-1">Luminosité (-2 à 2)</label>
+              <input type="range" name="brightness" min="-2" max="2" value="{{ config.brightness if config else 0 }}" class="w-full accent-blue-500">
+          </div>
+
+          <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition shadow-lg mt-2">
+            <i class="fa-solid fa-save mr-2"></i> Appliquer
+          </button>
+        </form>
+      </div>
+
+    </div>
   </div>
 
-  <div class="flex-1 overflow-y-auto p-6 relative">
-
-    <div id="tab-gallery">
-        <h1 class="text-2xl font-semibold mb-4 text-gray-800">Images capturées</h1>
-        
-        <form method="GET" action="/search" class="flex flex-wrap items-end gap-4 mb-6 bg-white p-4 rounded-lg shadow">
-            <div class="flex flex-col">
-                <label for="start_date" class="text-sm font-semibold text-gray-700">Début</label>
-                <input type="date" id="start_date" name="start_date" class="p-2 border rounded text-gray-700">
-            </div>
-            <div class="flex flex-col">
-                <label for="end_date" class="text-sm font-semibold text-gray-700">Fin</label>
-                <input type="date" id="end_date" name="end_date" class="p-2 border rounded text-gray-700">
-            </div>
-            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
-                Filtrer
-            </button>
-        </form>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {% for img in images %}
-          <div class="bg-white rounded-lg shadow-md p-2 flex items-center justify-center">
-            <img src="{{ url_for('static', filename=img) }}" class="rounded max-h-60 object-contain hover:scale-105 transition-transform duration-200">
-          </div>
-          {% else %}
-          <p class="text-gray-500">Aucune image trouvée.</p>
-          {% endfor %}
+  <div class="flex-1 flex flex-col overflow-hidden relative">
+    
+    <header class="bg-white shadow p-6 flex justify-between items-center z-10">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">
+                {% if selected_cam %}
+                    {{ selected_cam.Nom }}
+                {% else %}
+                    Aucune caméra sélectionnée
+                {% endif %}
+            </h1>
+            <p class="text-sm text-gray-500">ID Système: {{ selected_cam.id if selected_cam else 'N/A' }}</p>
         </div>
-    </div>
+        <div class="text-right">
+             <span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded border border-green-400">En ligne</span>
+        </div>
+    </header>
 
-    <div id="tab-stats" class="hidden">
-        <h1 class="text-2xl font-semibold mb-6 text-gray-800">Suivi de la Batterie</h1>
-        
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-white p-4 rounded-lg shadow-lg">
-                <h3 class="text-lg font-bold mb-4 text-green-600">Niveau de charge (%)</h3>
-                <div class="relative h-64 w-full">
-                    <canvas id="chartLevel"></canvas>
-                </div>
-            </div>
+    <main class="flex-1 overflow-y-auto p-6 bg-gray-100">
 
-            <div class="bg-white p-4 rounded-lg shadow-lg">
-                <h3 class="text-lg font-bold mb-4 text-orange-600">Tension (Volts)</h3>
-                <div class="relative h-64 w-full">
-                    <canvas id="chartVoltage"></canvas>
+        <div id="tab-gallery" class="fade-in block">
+            
+            <form method="GET" action="/" class="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-wrap gap-4 items-end">
+                <input type="hidden" name="cam_id" value="{{ selected_cam.id if selected_cam else '' }}">
+                
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Début</label>
+                    <input type="date" name="start_date" class="block w-full border-gray-300 rounded-md border p-2 text-sm">
                 </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Fin</label>
+                    <input type="date" name="end_date" class="block w-full border-gray-300 rounded-md border p-2 text-sm">
+                </div>
+                <button type="submit" class="bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-600 transition">
+                    Filtrer
+                </button>
+            </form>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {% for img in images %}
+                <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 group relative border border-gray-200">
+                    
+                    <div class="h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
+                        <img src="{{ url_for('static', filename=img.url) }}" loading="lazy" class="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500">
+                    </div>
+
+                    <div class="p-3 flex justify-between items-center bg-white">
+                        <span class="text-xs text-gray-500 font-mono">
+                            <i class="fa-regular fa-clock mr-1"></i>{{ img.date }}
+                        </span>
+                    </div>
+
+                    <form action="/delete_image/{{ img.id }}" method="POST" onsubmit="return confirm('Supprimer définitivement cette image ?');">
+                        <button type="submit" class="absolute top-2 right-2 bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-700 hover:scale-110">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </form>
+
+                </div>
+                {% else %}
+                <div class="col-span-full text-center py-20">
+                    <div class="text-gray-400 text-6xl mb-4"><i class="fa-regular fa-image"></i></div>
+                    <p class="text-gray-500 text-lg">Aucune image trouvée pour cette caméra.</p>
+                </div>
+                {% endfor %}
             </div>
         </div>
-    </div>
 
+        <div id="tab-stats" class="fade-in hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                    <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
+                        Niveau Batterie (%)
+                    </h3>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chartLevel"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                    <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>
+                        Tension (Volts)
+                    </h3>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chartVoltage"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
   </div>
 
   <script>
     // --- 1. GESTION DES ONGLETS ---
-    function showTab(tabName) {
-        const gallery = document.getElementById('tab-gallery');
-        const stats = document.getElementById('tab-stats');
+    function switchTab(tabName) {
+        const galleryDiv = document.getElementById('tab-gallery');
+        const statsDiv = document.getElementById('tab-stats');
         const btnGallery = document.getElementById('btn-gallery');
         const btnStats = document.getElementById('btn-stats');
 
         if (tabName === 'gallery') {
-            gallery.classList.remove('hidden');
-            stats.classList.add('hidden');
+            galleryDiv.classList.remove('hidden');
+            statsDiv.classList.add('hidden');
             
-            // Styles boutons
-            btnGallery.classList.add('bg-blue-600', 'text-white');
-            btnGallery.classList.remove('bg-slate-700', 'text-gray-300');
-            btnStats.classList.add('bg-slate-700', 'text-gray-300');
-            btnStats.classList.remove('bg-blue-600', 'text-white');
+            // Style actif
+            btnGallery.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+            btnGallery.classList.remove('bg-slate-800', 'text-gray-400');
+            
+            // Style inactif
+            btnStats.classList.add('bg-slate-800', 'text-gray-400');
+            btnStats.classList.remove('bg-blue-600', 'text-white', 'shadow-lg');
         } else {
-            gallery.classList.add('hidden');
-            stats.classList.remove('hidden');
+            galleryDiv.classList.add('hidden');
+            statsDiv.classList.remove('hidden');
 
-            // Styles boutons
-            btnStats.classList.add('bg-blue-600', 'text-white');
-            btnStats.classList.remove('bg-slate-700', 'text-gray-300');
-            btnGallery.classList.add('bg-slate-700', 'text-gray-300');
-            btnGallery.classList.remove('bg-blue-600', 'text-white');
+            // Style actif
+            btnStats.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+            btnStats.classList.remove('bg-slate-800', 'text-gray-400');
+
+            // Style inactif
+            btnGallery.classList.add('bg-slate-800', 'text-gray-400');
+            btnGallery.classList.remove('bg-blue-600', 'text-white', 'shadow-lg');
         }
     }
 
-    // --- 2. CONFIGURATION DES GRAPHIQUES ---
+    // --- 2. CONFIGURATION CHART.JS ---
     
-    // Récupération des données injectées par Flask (safe filter est crucial)
-    const labelsData = {{ dates_json | safe }};
-    const levelData = {{ levels_json | safe }};
-    const voltageData = {{ voltages_json | safe }};
+    // Récupération des données injectées par Flask (safe filter indispensable)
+    // Si pas de données, on met des tableaux vides pour éviter le crash JS
+    const labels = {{ dates_json | safe }} || [];
+    const levelData = {{ levels_json | safe }} || [];
+    const voltageData = {{ voltages_json | safe }} || [];
 
-    // Graphique Pourcentage
-    new Chart(document.getElementById('chartLevel'), {
+    // --- Graphique Pourcentage ---
+    const ctxLevel = document.getElementById('chartLevel').getContext('2d');
+    new Chart(ctxLevel, {
         type: 'line',
         data: {
-            labels: labelsData,
+            labels: labels,
             datasets: [{
-                label: 'Batterie (%)',
+                label: 'Charge (%)',
                 data: levelData,
-                borderColor: '#16a34a', // Green-600
-                backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                borderColor: 'rgb(34, 197, 94)', // Green-500
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                borderWidth: 2,
+                pointRadius: 3,
                 fill: true,
-                tension: 0.3
+                tension: 0.4 // Courbe lisse
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true, max: 100 } }
+            scales: {
+                y: { beginAtZero: true, max: 100, grid: { color: '#f3f4f6' } },
+                x: { grid: { display: false } }
+            },
+            plugins: { legend: { display: false } }
         }
     });
 
-    // Graphique Voltage
-    new Chart(document.getElementById('chartVoltage'), {
+    // --- Graphique Voltage ---
+    const ctxVolt = document.getElementById('chartVoltage').getContext('2d');
+    new Chart(ctxVolt, {
         type: 'line',
         data: {
-            labels: labelsData,
+            labels: labels,
             datasets: [{
                 label: 'Tension (V)',
                 data: voltageData,
-                borderColor: '#ea580c', // Orange-600
-                backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                borderColor: 'rgb(249, 115, 22)', // Orange-500
+                backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                borderWidth: 2,
+                pointRadius: 3,
                 fill: true,
-                tension: 0.3
+                tension: 0.4
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: false, grid: { color: '#f3f4f6' } }, // Pas forcément à 0 pour le voltage
+                x: { grid: { display: false } }
+            },
+            plugins: { legend: { display: false } }
         }
     });
   </script>
