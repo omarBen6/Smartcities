@@ -2,98 +2,103 @@ from flask import Flask, render_template, request, redirect, url_for
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-# AJOUT : Import de la table Battrie
-from TablesMariaDB import CamParametre, Wifi, Battrie 
+from TablesMariaDB import CamParametre, Wifi, Battrie, Image, Camera
 from datetime import datetime
 import paho.mqtt.client as mqtt
-import json # AJOUT : Nécessaire pour passer les listes au JavaScript
+import json 
 
 app = Flask(__name__)
 
 engine = create_engine("mariadb+mariadbconnector://martin:1234@192.168.2.58:3306/RPG", echo=True)
 Session = sessionmaker(bind=engine)
 
-# On garde ton code de connexion MQTT tel quel
-cli = mqtt.Client()
+# --- CONFIGURATION MQTT (Juste pour l'envoi) ---
+# On ne définit PAS de on_message ici, car c'est mariaDB.py qui gère la réception.
+cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 cli.connect("192.168.2.58", 1883)
+cli.loop_start() 
 
-# --- FONCTION UTILITAIRE POUR LES GRAPHIQUES ---
-def get_battery_data():
-    """Récupère les 50 dernières données de batterie pour les graphiques"""
+def get_battery_data(cam_id):
     session = Session()
-    # On récupère les données triées par date
-    donnees = session.query(Battrie).order_by(Battrie.date.asc()).limit(50).all()
+    donnees = session.query(Battrie).filter(Battrie.NumeroCam == cam_id).order_by(Battrie.date.asc()).limit(50).all()
     session.close()
 
-    # On prépare les listes
-    labels = [d.date.strftime("%H:%M:%S") for d in donnees]
-    levels = [d.poucentage for d in donnees] # Attention à l'orthographe 'poucentage' de ta BDD
+    labels = [d.date for d in donnees]
+    levels = [d.poucentage for d in donnees]
     voltages = [d.voltage for d in donnees]
 
     return json.dumps(labels), json.dumps(levels), json.dumps(voltages)
 
-# PAGE PRINCIPALE 
 @app.route('/')
 def index():
-    # 1. Gestion des Images (Ton code original)
-    image_folder = os.path.join(app.static_folder, "images")
-    try:
-        images = [
-            f"images/{file}" for file in os.listdir(image_folder)
-            if file.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp"))
-        ]
-        images.sort(reverse=True) # On trie pour voir les plus récentes d'abord
-    except FileNotFoundError:
-        images = []
+    session = Session()
+    
+    # 1. Menu déroulant : Récupérer toutes les caméras
+    cameras = session.query(Camera).all()
+    
+    # 2. Quelle caméra afficher ?
+    cam_id_arg = request.args.get('cam_id', type=int)
+    
+    selected_cam = None
+    if cameras:
+        if cam_id_arg:
+            for cam in cameras:
+                if cam.id == cam_id_arg:
+                    selected_cam = cam
+                    break
+        if not selected_cam:
+            selected_cam = cameras[0]
+            
+    current_id = selected_cam.id if selected_cam else 0
 
-    # 2. Gestion des Graphiques (NOUVEAU)
-    dates_json, levels_json, voltages_json = get_battery_data()
+    # 3. Données pour la caméra sélectionnée
+    images_db = session.query(Image).filter(Image.NumeroCam == current_id).order_by(Image.date.desc()).all()
+    current_config = session.query(CamParametre).filter(CamParametre.NumeroCam == current_id).order_by(CamParametre.id.desc()).first()
+    
+    session.close()
+
+    images_data = []
+    for img in images_db:
+        nom_fichier = os.path.basename(img.path)
+        images_data.append({"id": img.idi, "url": f"images/{nom_fichier}", "date": img.date})
+
+    dates_json, levels_json, voltages_json = get_battery_data(current_id)
 
     return render_template("index.html", 
-                           images=images, 
+                           images=images_data,
                            dates_json=dates_json, 
                            levels_json=levels_json, 
-                           voltages_json=voltages_json)
+                           voltages_json=voltages_json,
+                           cameras=cameras,          
+                           selected_cam=selected_cam, 
+                           config=current_config)
+
+@app.route('/delete_image/<int:image_id>', methods=['POST'])
+def delete_image(image_id):
+    session = Session()
+    image_to_delete = session.query(Image).filter_by(idi=image_id).first()
     
-@app.route('/search')
-def search():
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    if image_to_delete:
+        try:
+            if os.path.exists(image_to_delete.path):
+                os.remove(image_to_delete.path)
+        except Exception as e:
+            print(f"Erreur suppression fichier : {e}")
 
-    image_folder = os.path.join(app.static_folder, "images")
-    try:
-        all_images = [
-            f"images/{file}" for file in os.listdir(image_folder)
-            if file.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp"))
-        ]
-    except FileNotFoundError:
-        all_images = []
-
-    filtered_images = []
-    for img in all_images:
-        path = os.path.join(image_folder, os.path.basename(img))
-        file_time = datetime.fromtimestamp(os.path.getmtime(path))
-
-        if start_date and file_time < datetime.fromisoformat(start_date):
-            continue
-        if end_date and file_time > datetime.fromisoformat(end_date):
-            continue
-
-        filtered_images.append(img)
+        session.delete(image_to_delete)
+        session.commit()
+        
+    session.close()
+    return redirect(url_for('index'))    
     
-    # On renvoie aussi les données graphiques même lors d'une recherche
-    dates_json, levels_json, voltages_json = get_battery_data()
-
-    return render_template("index.html", 
-                           images=filtered_images,
-                           dates_json=dates_json, 
-                           levels_json=levels_json, 
-                           voltages_json=voltages_json)
-
-
-# TRAITEMENT DES PARAMÈTRES
 @app.route('/update_params', methods=['POST'])
 def update_params():
+    cam_id = request.form.get('cam_id', type=int) # L'ID vient du formulaire caché ou du select
+    
+    # Si cam_id est None, on ne peut rien faire
+    if not cam_id:
+        return redirect(url_for('index'))
+
     ssid = request.form.get('ssid')
     password = request.form.get('password')
 
@@ -102,28 +107,21 @@ def update_params():
     contrast = request.form.get('contrast')
     saturation = request.form.get('saturation')
     quality = request.form.get('quality')
-    mirror = request.form.get('mirror') # Checkbox: renvoie 'on' ou None
+    mirror = request.form.get('mirror')
     flip = request.form.get('flip')
 
-    # Conversion des checkbox en booléen ou entier si nécessaire
     mirror_val = 1 if mirror else 0
     flip_val = 1 if flip else 0
 
     session = Session()
     
-    # Création WiFi si des données sont entrées
     if ssid:
-        new_param_wifi = Wifi(
-            ssid=ssid,
-            pasword=password,
-            date=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
+        new_param_wifi = Wifi(NumeroCam=cam_id, ssid=ssid, pasword=password, date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         session.add(new_param_wifi)
 
-    # Création Paramètres Caméra
-    # Attention aux conversion int() qui peuvent planter si le champ est vide
     try:
         new_param = CamParametre(
+            NumeroCam=cam_id,
             resolution=resolution,
             brightness=int(brightness) if brightness else 0,
             contrast=int(contrast) if contrast else 0,
@@ -136,16 +134,17 @@ def update_params():
         session.add(new_param)
         session.commit()
         
-        # Envoi MQTT seulement si succès DB
-        cli.publish("B3/MartinOmar/parametre/camera/update","update")
+        # Envoi MQTT : On cible la caméra spécifique ou le topic général
+        # Pour faire simple, on envoie le signal d'update
+        cli.publish("B3/MartinOmar/parametre/camera/update", "update")
         
     except Exception as e:
-        print(f"Erreur lors de l'enregistrement : {e}")
+        print(f"Erreur enregistrement : {e}")
         session.rollback()
     finally:
         session.close()
 
-    return redirect(url_for('index'))
+    return redirect(url_for('index', cam_id=cam_id))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
