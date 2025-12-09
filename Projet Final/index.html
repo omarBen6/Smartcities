@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard CamÃ©ra - {{ selected_cam.Nom if selected_cam else 'Aucune' }}</title>
+  <title>Dashboard Caméra - {{ selected_cam.Nom if selected_cam else 'Aucune' }}</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,6 +13,14 @@
     /* Petite animation pour le changement d'onglet */
     .fade-in { animation: fadeIn 0.3s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    /* Style pour les sliders */
+    input[type=range] {
+      height: 4px;
+      border-radius: 5px;
+      background: #475569;
+      outline: none;
+    }
   </style>
 </head>
 
@@ -30,17 +38,17 @@
 
       <div>
         <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-            CamÃ©ra Active
+            Caméra Active
         </label>
         <div class="relative">
             <select onchange="window.location.href='/?cam_id='+this.value" 
                     class="w-full bg-slate-700 text-white p-3 rounded-lg appearance-none cursor-pointer hover:bg-slate-600 transition focus:outline-none border border-slate-600 focus:border-blue-500">
                 {% for cam in cameras %}
                     <option value="{{ cam.id }}" {% if selected_cam and cam.id == selected_cam.id %}selected{% endif %}>
-                        ðŸŽ¥ {{ cam.Nom }} (ID: {{ cam.id }})
+                        🎥 {{ cam.Nom }} (ID: {{ cam.id }})
                     </option>
                 {% else %}
-                    <option value="">Aucune camÃ©ra</option>
+                    <option value="">Aucune caméra</option>
                 {% endfor %}
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
@@ -65,32 +73,78 @@
         <form method="POST" action="/update_params" class="space-y-4">
           <input type="hidden" name="cam_id" value="{{ selected_cam.id if selected_cam else '' }}">
 
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">Wi-Fi SSID</label>
-            <input type="text" name="ssid" placeholder="Nom du rÃ©seau" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm focus:border-blue-500 focus:outline-none">
-          </div>
-          <div>
-            <label class="text-xs text-gray-500 block mb-1">Wi-Fi Password</label>
-            <input type="password" name="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm focus:border-blue-500 focus:outline-none">
-          </div>
-
-          <div>
-             <label class="text-xs text-gray-500 block mb-1">RÃ©solution</label>
-             <select name="resolution" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-sm">
-                <option value="QVGA (320x240)" {% if config and config.resolution == 'QVGA (320x240)' %}selected{% endif %}>QVGA</option>
-                <option value="VGA (640x480)" {% if config and config.resolution == 'VGA (640x480)' %}selected{% endif %}>VGA</option>
-                <option value="SVGA (800x600)" {% if config and config.resolution == 'SVGA (800x600)' %}selected{% endif %}>SVGA</option>
-                <option value="UXGA (1600x1200)" {% if config and config.resolution == 'UXGA (1600x1200)' %}selected{% endif %}>UXGA</option>
-             </select>
+          <div class="bg-slate-800 p-3 rounded border border-slate-700">
+            <h4 class="text-xs font-bold text-blue-400 mb-2">CONNEXION</h4>
+            <div class="space-y-2">
+                <div>
+                    <label class="text-[10px] text-gray-500 uppercase block">SSID</label>
+                    <input type="text" name="ssid" placeholder="Nom du réseau" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs focus:border-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="text-[10px] text-gray-500 uppercase block">Password</label>
+                    <input type="password" name="password" placeholder="•••••••" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs focus:border-blue-500 focus:outline-none">
+                </div>
+            </div>
           </div>
 
-          <div>
-              <label class="text-xs text-gray-500 block mb-1">LuminositÃ© (-2 Ã  2)</label>
-              <input type="range" name="brightness" min="-2" max="2" value="{{ config.brightness if config else 0 }}" class="w-full accent-blue-500">
+          <div class="bg-slate-800 p-3 rounded border border-slate-700 space-y-3">
+             <h4 class="text-xs font-bold text-blue-400 mb-2">IMAGE</h4>
+             
+             <div>
+                <label class="text-[10px] text-gray-500 uppercase block mb-1">Résolution</label>
+                <select name="resolution" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs">
+                    <option value="QVGA (320x240)" {% if config and config.resolution == 'QVGA (320x240)' %}selected{% endif %}>QVGA</option>
+                    <option value="VGA (640x480)" {% if config and config.resolution == 'VGA (640x480)' %}selected{% endif %}>VGA</option>
+                    <option value="SVGA (800x600)" {% if config and config.resolution == 'SVGA (800x600)' %}selected{% endif %}>SVGA</option>
+                    <option value="UXGA (1600x1200)" {% if config and config.resolution == 'UXGA (1600x1200)' %}selected{% endif %}>UXGA</option>
+                </select>
+             </div>
+
+             <div>
+                <label class="text-[10px] text-gray-500 uppercase block mb-1">Qualité JPEG (0-63)</label>
+                <input type="number" name="quality" min="0" max="63" value="{{ config.quality if config else 10 }}" class="w-full p-1.5 rounded bg-slate-900 border border-slate-600 text-xs">
+             </div>
+
+             <div class="space-y-2">
+                 <div>
+                    <div class="flex justify-between">
+                        <label class="text-[10px] text-gray-500 uppercase">Luminosité</label>
+                        <span class="text-[10px] text-gray-400">{{ config.brightness if config else 0 }}</span>
+                    </div>
+                    <input type="range" name="brightness" min="-2" max="2" value="{{ config.brightness if config else 0 }}" class="w-full accent-blue-500 cursor-pointer">
+                 </div>
+
+                 <div>
+                    <div class="flex justify-between">
+                        <label class="text-[10px] text-gray-500 uppercase">Contraste</label>
+                        <span class="text-[10px] text-gray-400">{{ config.contrast if config else 0 }}</span>
+                    </div>
+                    <input type="range" name="contrast" min="-2" max="2" value="{{ config.contrast if config else 0 }}" class="w-full accent-blue-500 cursor-pointer">
+                 </div>
+
+                 <div>
+                    <div class="flex justify-between">
+                        <label class="text-[10px] text-gray-500 uppercase">Saturation</label>
+                        <span class="text-[10px] text-gray-400">{{ config.saturation if config else 0 }}</span>
+                    </div>
+                    <input type="range" name="saturation" min="-2" max="2" value="{{ config.saturation if config else 0 }}" class="w-full accent-blue-500 cursor-pointer">
+                 </div>
+             </div>
+
+             <div class="flex gap-4 pt-2">
+                 <div class="flex items-center gap-2">
+                     <input type="checkbox" name="mirror" id="mirror" {% if config and (config.mirror == '1' or config.mirror == 1) %}checked{% endif %} class="rounded bg-slate-900 border-slate-600 text-blue-600 focus:ring-0">
+                     <label for="mirror" class="text-xs text-gray-400 cursor-pointer select-none">Miroir</label>
+                 </div>
+                 <div class="flex items-center gap-2">
+                     <input type="checkbox" name="flip" id="flip" {% if config and (config.flip == '1' or config.flip == 1) %}checked{% endif %} class="rounded bg-slate-900 border-slate-600 text-blue-600 focus:ring-0">
+                     <label for="flip" class="text-xs text-gray-400 cursor-pointer select-none">Flip Vertical</label>
+                 </div>
+             </div>
           </div>
 
-          <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition shadow-lg mt-2">
-            <i class="fa-solid fa-save mr-2"></i> Appliquer
+          <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition shadow-lg mt-2 text-sm">
+            <i class="fa-solid fa-save mr-2"></i> Sauvegarder
           </button>
         </form>
       </div>
@@ -106,10 +160,10 @@
                 {% if selected_cam %}
                     {{ selected_cam.Nom }}
                 {% else %}
-                    Aucune camÃ©ra sÃ©lectionnÃ©e
+                    Aucune caméra sélectionnée
                 {% endif %}
             </h1>
-            <p class="text-sm text-gray-500">ID SystÃ¨me: {{ selected_cam.id if selected_cam else 'N/A' }}</p>
+            <p class="text-sm text-gray-500">ID Système: {{ selected_cam.id if selected_cam else 'N/A' }}</p>
         </div>
         <div class="text-right">
              <span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded border border-green-400">En ligne</span>
@@ -124,7 +178,7 @@
                 <input type="hidden" name="cam_id" value="{{ selected_cam.id if selected_cam else '' }}">
                 
                 <div>
-                    <label class="text-xs font-bold text-gray-500 uppercase">DÃ©but</label>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Début</label>
                     <input type="date" name="start_date" class="block w-full border-gray-300 rounded-md border p-2 text-sm">
                 </div>
                 <div>
@@ -150,7 +204,7 @@
                         </span>
                     </div>
 
-                    <form action="/delete_image/{{ img.id }}" method="POST" onsubmit="return confirm('Supprimer dÃ©finitivement cette image ?');">
+                    <form action="/delete_image/{{ img.id }}" method="POST" onsubmit="return confirm('Supprimer définitivement cette image ?');">
                         <button type="submit" class="absolute top-2 right-2 bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-700 hover:scale-110">
                             <i class="fa-solid fa-trash text-xs"></i>
                         </button>
@@ -160,7 +214,7 @@
                 {% else %}
                 <div class="col-span-full text-center py-20">
                     <div class="text-gray-400 text-6xl mb-4"><i class="fa-regular fa-image"></i></div>
-                    <p class="text-gray-500 text-lg">Aucune image trouvÃ©e pour cette camÃ©ra.</p>
+                    <p class="text-gray-500 text-lg">Aucune image trouvée pour cette caméra.</p>
                 </div>
                 {% endfor %}
             </div>
@@ -229,9 +283,6 @@
     }
 
     // --- 2. CONFIGURATION CHART.JS ---
-    
-    // RÃ©cupÃ©ration des donnÃ©es injectÃ©es par Flask (safe filter indispensable)
-    // Si pas de donnÃ©es, on met des tableaux vides pour Ã©viter le crash JS
     const labels = {{ dates_json | safe }} || [];
     const levelData = {{ levels_json | safe }} || [];
     const voltageData = {{ voltages_json | safe }} || [];
@@ -245,12 +296,12 @@
             datasets: [{
                 label: 'Charge (%)',
                 data: levelData,
-                borderColor: 'rgb(34, 197, 94)', // Green-500
+                borderColor: 'rgb(34, 197, 94)', 
                 backgroundColor: 'rgba(34, 197, 94, 0.1)',
                 borderWidth: 2,
                 pointRadius: 3,
                 fill: true,
-                tension: 0.4 // Courbe lisse
+                tension: 0.4 
             }]
         },
         options: {
@@ -273,7 +324,7 @@
             datasets: [{
                 label: 'Tension (V)',
                 data: voltageData,
-                borderColor: 'rgb(249, 115, 22)', // Orange-500
+                borderColor: 'rgb(249, 115, 22)', 
                 backgroundColor: 'rgba(249, 115, 22, 0.1)',
                 borderWidth: 2,
                 pointRadius: 3,
@@ -285,7 +336,7 @@
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: { beginAtZero: false, grid: { color: '#f3f4f6' } }, // Pas forcÃ©ment Ã  0 pour le voltage
+                y: { beginAtZero: false, grid: { color: '#f3f4f6' } }, 
                 x: { grid: { display: false } }
             },
             plugins: { legend: { display: false } }
