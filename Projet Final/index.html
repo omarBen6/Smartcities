@@ -5,89 +5,193 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ESP32-CAM Control Panel</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body class="flex h-screen bg-gray-100">
 
-  <!-- ============================
-       BARRE LATÉRALE : CONFIGURATION ESP32
-  ============================ -->
-  <div class="w-80 bg-slate-800 text-white flex flex-col p-6 space-y-5">
-    <h2 class="text-xl font-bold mb-4">Configuration ESP32-CAM</h2>
+  <div class="w-80 bg-slate-800 text-white flex flex-col p-6 space-y-5 h-full overflow-y-auto">
+    <h2 class="text-xl font-bold mb-2">ESP32 Dashboard</h2>
 
+    <div class="flex flex-col gap-2 border-b border-slate-600 pb-4">
+        <button onclick="showTab('gallery')" id="btn-gallery" class="bg-blue-600 text-white p-2 rounded text-left font-semibold hover:bg-blue-500 transition">
+            🖼️ Galerie Images
+        </button>
+        <button onclick="showTab('stats')" id="btn-stats" class="bg-slate-700 text-gray-300 p-2 rounded text-left font-semibold hover:bg-blue-500 hover:text-white transition">
+            📈 Graphiques Batterie
+        </button>
+    </div>
+
+    <h2 class="text-lg font-bold mt-2">Configuration</h2>
     <form method="POST" action="/update_params" class="flex flex-col space-y-3">
+      
+      <h3 class="text-sm font-semibold text-gray-400">Wi-Fi</h3>
+      <input type="text" name="ssid" class="p-2 rounded text-black text-sm" placeholder="SSID">
+      <input type="password" name="password" class="p-2 rounded text-black text-sm" placeholder="Mot de passe">
 
-      <!-- Paramètres Wi-Fi -->
-      <h3 class="text-lg font-semibold border-b border-slate-600 pb-1">Wi-Fi</h3>
-      <label>SSID</label>
-      <input type="text" name="ssid" class="p-2 rounded text-black" placeholder="Nom du réseau Wi-Fi">
-
-      <label>Mot de passe</label>
-      <input type="password" name="password" class="p-2 rounded text-black" placeholder="••••••••••">
-
-      <!-- Paramètres caméra -->
-      <h3 class="text-lg font-semibold border-b border-slate-600 pt-4 pb-1">Caméra</h3>
-
-      <!-- Résolution -->
-      <label>Résolution</label>
-      <select name="resolution" class="p-2 rounded text-black">
+      <h3 class="text-sm font-semibold text-gray-400 mt-2">Caméra</h3>
+      
+      <label class="text-xs">Résolution</label>
+      <select name="resolution" class="p-2 rounded text-black text-sm">
         <option value="QVGA (320x240)">QVGA (320x240)</option>
         <option value="VGA (640x480)">VGA (640x480)</option>
         <option value="SVGA (800x600)">SVGA (800x600)</option>
         <option value="XGA (1024x768)">XGA (1024x768)</option>
-        <option value="SXGA (1280x1024)">SXGA (1280x1024)</option>
         <option value="UXGA (1600x1200)">UXGA (1600x1200)</option>
       </select>
 
-      <!-- Luminosité -->
-      <label>Luminosité</label>
-      <input type="range" name="brightness" min="-2" max="2" value="0" class="w-full">
+      <label class="text-xs">Luminosité / Contraste / Saturation</label>
+      <div class="grid grid-cols-3 gap-2">
+          <input type="range" name="brightness" min="-2" max="2" value="0" title="Luminosité">
+          <input type="range" name="contrast" min="-2" max="2" value="0" title="Contraste">
+          <input type="range" name="saturation" min="-2" max="2" value="0" title="Saturation">
+      </div>
 
-      <!-- Contraste -->
-      <label>Contraste</label>
-      <input type="range" name="contrast" min="-2" max="2" value="0" class="w-full">
+      <label class="text-xs">Qualité (0-63)</label>
+      <input type="number" name="quality" min="0" max="63" value="10" class="p-2 rounded text-black text-sm">
 
-      <!-- Saturation -->
-      <label>Saturation</label>
-      <input type="range" name="saturation" min="-2" max="2" value="0" class="w-full">
-
-      <!-- Qualité JPEG -->
-      <label>Qualité JPEG</label>
-      <input type="number" name="quality" min="10" max="63" value="30" class="p-2 rounded text-black">
-
-      <!-- Miroir / Flip -->
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center space-x-2 mt-2">
         <input type="checkbox" name="mirror" id="mirror">
-        <label for="mirror">Miroir horizontal</label>
+        <label for="mirror" class="text-sm">Miroir</label>
+        <input type="checkbox" name="flip" id="flip" class="ml-4">
+        <label for="flip" class="text-sm">Flip</label>
       </div>
 
-      <div class="flex items-center space-x-2">
-        <input type="checkbox" name="flip" id="flip">
-        <label for="flip">Rotation verticale</label>
-      </div>
-
-      <!-- Bouton -->
-      <button type="submit"
-              class="bg-green-600 hover:bg-green-700 text-white py-2 rounded mt-4 font-semibold">
-        Envoyer au module
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white py-2 rounded mt-4 font-semibold">
+        Envoyer
       </button>
     </form>
   </div>
 
-  <!-- ============================
-       ZONE PRINCIPALE : IMAGES CAPTURÉES
-  ============================ -->
-  <div class="flex-1 overflow-y-auto p-6">
-    <h1 class="text-2xl font-semibold mb-4">Images capturées</h1>
+  <div class="flex-1 overflow-y-auto p-6 relative">
 
-    <div id="gallery" class="grid grid-cols-3 gap-4">
-      {% for img in images %}
-      <div class="bg-white rounded-lg shadow-md p-2 flex items-center justify-center">
-        <img src="{{ url_for('static', filename=img) }}" class="rounded max-h-60 object-contain">
-      </div>
-      {% endfor %}
+    <div id="tab-gallery">
+        <h1 class="text-2xl font-semibold mb-4 text-gray-800">Images capturées</h1>
+        
+        <form method="GET" action="/search" class="flex flex-wrap items-end gap-4 mb-6 bg-white p-4 rounded-lg shadow">
+            <div class="flex flex-col">
+                <label for="start_date" class="text-sm font-semibold text-gray-700">Début</label>
+                <input type="date" id="start_date" name="start_date" class="p-2 border rounded text-gray-700">
+            </div>
+            <div class="flex flex-col">
+                <label for="end_date" class="text-sm font-semibold text-gray-700">Fin</label>
+                <input type="date" id="end_date" name="end_date" class="p-2 border rounded text-gray-700">
+            </div>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
+                Filtrer
+            </button>
+        </form>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {% for img in images %}
+          <div class="bg-white rounded-lg shadow-md p-2 flex items-center justify-center">
+            <img src="{{ url_for('static', filename=img) }}" class="rounded max-h-60 object-contain hover:scale-105 transition-transform duration-200">
+          </div>
+          {% else %}
+          <p class="text-gray-500">Aucune image trouvée.</p>
+          {% endfor %}
+        </div>
     </div>
+
+    <div id="tab-stats" class="hidden">
+        <h1 class="text-2xl font-semibold mb-6 text-gray-800">Suivi de la Batterie</h1>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-bold mb-4 text-green-600">Niveau de charge (%)</h3>
+                <div class="relative h-64 w-full">
+                    <canvas id="chartLevel"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-bold mb-4 text-orange-600">Tension (Volts)</h3>
+                <div class="relative h-64 w-full">
+                    <canvas id="chartVoltage"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
   </div>
+
+  <script>
+    // --- 1. GESTION DES ONGLETS ---
+    function showTab(tabName) {
+        const gallery = document.getElementById('tab-gallery');
+        const stats = document.getElementById('tab-stats');
+        const btnGallery = document.getElementById('btn-gallery');
+        const btnStats = document.getElementById('btn-stats');
+
+        if (tabName === 'gallery') {
+            gallery.classList.remove('hidden');
+            stats.classList.add('hidden');
+            
+            // Styles boutons
+            btnGallery.classList.add('bg-blue-600', 'text-white');
+            btnGallery.classList.remove('bg-slate-700', 'text-gray-300');
+            btnStats.classList.add('bg-slate-700', 'text-gray-300');
+            btnStats.classList.remove('bg-blue-600', 'text-white');
+        } else {
+            gallery.classList.add('hidden');
+            stats.classList.remove('hidden');
+
+            // Styles boutons
+            btnStats.classList.add('bg-blue-600', 'text-white');
+            btnStats.classList.remove('bg-slate-700', 'text-gray-300');
+            btnGallery.classList.add('bg-slate-700', 'text-gray-300');
+            btnGallery.classList.remove('bg-blue-600', 'text-white');
+        }
+    }
+
+    // --- 2. CONFIGURATION DES GRAPHIQUES ---
+    
+    // Récupération des données injectées par Flask (safe filter est crucial)
+    const labelsData = {{ dates_json | safe }};
+    const levelData = {{ levels_json | safe }};
+    const voltageData = {{ voltages_json | safe }};
+
+    // Graphique Pourcentage
+    new Chart(document.getElementById('chartLevel'), {
+        type: 'line',
+        data: {
+            labels: labelsData,
+            datasets: [{
+                label: 'Batterie (%)',
+                data: levelData,
+                borderColor: '#16a34a', // Green-600
+                backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, max: 100 } }
+        }
+    });
+
+    // Graphique Voltage
+    new Chart(document.getElementById('chartVoltage'), {
+        type: 'line',
+        data: {
+            labels: labelsData,
+            datasets: [{
+                label: 'Tension (V)',
+                data: voltageData,
+                borderColor: '#ea580c', // Orange-600
+                backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+  </script>
 
 </body>
 </html>
